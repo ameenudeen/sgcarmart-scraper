@@ -3,6 +3,7 @@ import time
 import json
 import re
 from datetime import datetime
+import os
 
 def extract_listing_id(url):
     if not url:
@@ -43,6 +44,9 @@ def clean_owners(s):
     m = re.search(r"\d+", s)
     return int(m.group()) if m else None
 
+def should_run_headless():
+    return os.getenv("GITHUB_ACTIONS", "").lower() == "true"
+
 BASE_URL = "https://www.sgcarmart.com/used_cars/listing.php"
 
 MAX_PAGES = 2
@@ -53,7 +57,7 @@ def scrape():
     results = []
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
+        browser = p.chromium.launch(headless=should_run_headless())
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
             viewport={"width": 1280, "height": 800},
@@ -61,6 +65,7 @@ def scrape():
             timezone_id="Asia/Singapore"
         )
         page = context.new_page()
+        print(f"[INFO] Running headless={should_run_headless()}")
 
         for page_num in range(MAX_PAGES):
             offset = page_num * PAGE_SIZE
