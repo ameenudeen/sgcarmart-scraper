@@ -125,7 +125,7 @@ def scrape():
 
                     coe = next((l for l in lines if "COE left" in l), None)
 
-                    mileage = next((l for l in lines if "km" in l and "(" not in l), None)
+                    mileage = next((l for l in lines if "km" in l), None)
                     engine = next((l for l in lines if "cc" in l), None)
                     owners = next((l for l in lines if re.search(r"\d+\s*Owner", l)), None)
 
@@ -188,7 +188,7 @@ def scrape():
                     print("[ERROR]", e)
                     continue
 
-            time.sleep(2)
+            time.sleep(0.3)
 
         browser.close()
 
@@ -196,10 +196,6 @@ def scrape():
 
 
 def save(data):
-    if not data:
-        print("[INFO] No data scraped")
-        return
-
     with open("sgcarmart.json", "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
