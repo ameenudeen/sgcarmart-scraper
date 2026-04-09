@@ -53,10 +53,12 @@ def scrape():
     results = []
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(headless=False)
         context = browser.new_context(
-            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
-            viewport={"width": 1280, "height": 800}
+            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            viewport={"width": 1280, "height": 800},
+            locale="en-SG",
+            timezone_id="Asia/Singapore"
         )
         page = context.new_page()
 
@@ -64,16 +66,28 @@ def scrape():
             offset = page_num * PAGE_SIZE
             url = f"{BASE_URL}?BRSR={offset}"
 
+            for attempt in range(3):
+                try:
+                    page.goto(url, timeout=60000)
+                    break
+                except:
+                    print(f"[RETRY] {url}")
+                    time.sleep(2)
+            page.wait_for_load_state("domcontentloaded")
+            page.wait_for_timeout(1000)
+            page.mouse.wheel(0, 3000)
+            page.wait_for_timeout(1000)
+
             print(f"[INFO] Loading {url}")
-            page.goto(url, timeout=60000)
+
 
             try:
-                page.wait_for_selector("div.listing_listing_container__3xJW2", timeout=15000)
+                page.wait_for_selector("a[href*='used-cars/info']", timeout=20000)
             except:
-                print("[WARN] Main container not found, retrying wait...")
-                page.wait_for_timeout(5000)
+                print("[WARN] Main container not found, retrying...")
+                page.wait_for_timeout(8000)
 
-            containers = page.query_selector_all("div.listing_listing_container__3xJW2 > div")
+            containers = page.query_selector_all("div[class*='listing_listing_container'] > div")
 
             print(f"[DEBUG] Found {len(containers)} containers")
 
