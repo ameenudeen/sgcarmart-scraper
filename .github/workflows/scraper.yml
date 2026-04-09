@@ -20,4 +20,10 @@ jobs:
 
       - run: playwright install --with-deps
 
-      - run: python listings.py
+      - run: python listings.py   # make sure this matches your filename
+
+      - name: Upload scraped data
+        uses: actions/upload-artifact@v3
+        with:
+          name: sgcarmart-data
+          path: sgcarmart.json
