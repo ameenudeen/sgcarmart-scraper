@@ -3,7 +3,6 @@ import time
 import json
 import re
 from datetime import datetime
-import os
 
 def extract_listing_id(url):
     if not url:
@@ -44,9 +43,6 @@ def clean_owners(s):
     m = re.search(r"\d+", s)
     return int(m.group()) if m else None
 
-def should_run_headless():
-    return os.getenv("GITHUB_ACTIONS", "").lower() == "true"
-
 BASE_URL = "https://www.sgcarmart.com/used_cars/listing.php"
 
 MAX_PAGES = 2
@@ -57,60 +53,29 @@ def scrape():
     results = []
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=should_run_headless())
+        browser = p.chromium.launch(headless=True)
         context = browser.new_context(
-            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-            viewport={"width": 1280, "height": 800},
-            locale="en-SG",
-            timezone_id="Asia/Singapore"
+            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+            viewport={"width": 1280, "height": 800}
         )
         page = context.new_page()
-        print(f"[INFO] Running headless={should_run_headless()}")
 
         for page_num in range(MAX_PAGES):
             offset = page_num * PAGE_SIZE
             url = f"{BASE_URL}?BRSR={offset}"
 
-            for attempt in range(3):
-                try:
-                    page.goto(url, timeout=60000)
-                    break
-                except:
-                    print(f"[RETRY] {url}")
-                    time.sleep(2)
-            page.wait_for_load_state("domcontentloaded")
-            page.wait_for_timeout(1000)
-            page.mouse.wheel(0, 5000)
-            page.wait_for_timeout(2000)
-
             print(f"[INFO] Loading {url}")
-
+            page.goto(url, timeout=60000)
 
             try:
-                page.wait_for_selector("a[href*='used-cars/info']", timeout=30000)
+                page.wait_for_selector("div.listing_listing_container__3xJW2", timeout=15000)
             except:
-                print("[WARN] Main container not found, retrying...")
-                page.wait_for_timeout(8000)
+                print("[WARN] Main container not found, retrying wait...")
+                page.wait_for_timeout(5000)
 
-            # Prefer link-based locator (more stable across headless)
-            link_nodes = page.query_selector_all("a[href*='used-cars/info']")
-            containers = []
-            for ln in link_nodes:
-                try:
-                    parent = ln.evaluate_handle("node => node.closest('div')")
-                    el = parent.as_element()
-                    if el:
-                        containers.append(el)
-                except:
-                    continue
+            containers = page.query_selector_all("div.listing_listing_container__3xJW2 > div")
 
             print(f"[DEBUG] Found {len(containers)} containers")
-
-            # Fallback: try grabbing any card boxes directly
-            if not containers:
-                boxes = page.query_selector_all("div[class*='styles_listing_box']")
-                containers = [b.evaluate_handle("node => node.closest('div')").as_element() for b in boxes if b]
-                print(f"[DEBUG] Fallback containers: {len(containers)}")
 
             for item in containers:
                 try:
@@ -121,8 +86,7 @@ def scrape():
                     text = box.inner_text().strip()
 
                     # 🔗 Extract link
-                    link_el = item.query_selector_all("a[href*='used-cars/info']")
-                    link_el = link_el[0] if link_el else None
+                    link_el = item.query_selector("a[href*='used-cars/info']")
                     href = link_el.get_attribute("href") if link_el else None
 
                     if href and href.startswith("/"):
@@ -161,7 +125,7 @@ def scrape():
 
                     coe = next((l for l in lines if "COE left" in l), None)
 
-                    mileage = next((l for l in lines if "km" in l), None)
+                    mileage = next((l for l in lines if "km" in l and "(" not in l), None)
                     engine = next((l for l in lines if "cc" in l), None)
                     owners = next((l for l in lines if re.search(r"\d+\s*Owner", l)), None)
 
@@ -224,7 +188,7 @@ def scrape():
                     print("[ERROR]", e)
                     continue
 
-            time.sleep(0.3)
+            time.sleep(2)
 
         browser.close()
 
@@ -232,6 +196,10 @@ def scrape():
 
 
 def save(data):
+    if not data:
+        print("[INFO] No data scraped")
+        return
+
     with open("sgcarmart.json", "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
