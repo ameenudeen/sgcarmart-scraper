@@ -80,21 +80,37 @@ def scrape():
                     time.sleep(2)
             page.wait_for_load_state("domcontentloaded")
             page.wait_for_timeout(1000)
-            page.mouse.wheel(0, 3000)
-            page.wait_for_timeout(1000)
+            page.mouse.wheel(0, 5000)
+            page.wait_for_timeout(2000)
 
             print(f"[INFO] Loading {url}")
 
 
             try:
-                page.wait_for_selector("a[href*='used-cars/info']", timeout=20000)
+                page.wait_for_selector("a[href*='used-cars/info']", timeout=30000)
             except:
                 print("[WARN] Main container not found, retrying...")
                 page.wait_for_timeout(8000)
 
-            containers = page.query_selector_all("div[class*='listing_listing_container'] > div")
+            # Prefer link-based locator (more stable across headless)
+            link_nodes = page.query_selector_all("a[href*='used-cars/info']")
+            containers = []
+            for ln in link_nodes:
+                try:
+                    parent = ln.evaluate_handle("node => node.closest('div')")
+                    el = parent.as_element()
+                    if el:
+                        containers.append(el)
+                except:
+                    continue
 
             print(f"[DEBUG] Found {len(containers)} containers")
+
+            # Fallback: try grabbing any card boxes directly
+            if not containers:
+                boxes = page.query_selector_all("div[class*='styles_listing_box']")
+                containers = [b.evaluate_handle("node => node.closest('div')").as_element() for b in boxes if b]
+                print(f"[DEBUG] Fallback containers: {len(containers)}")
 
             for item in containers:
                 try:
@@ -105,7 +121,8 @@ def scrape():
                     text = box.inner_text().strip()
 
                     # 🔗 Extract link
-                    link_el = item.query_selector("a[href*='used-cars/info']")
+                    link_el = item.query_selector_all("a[href*='used-cars/info']")
+                    link_el = link_el[0] if link_el else None
                     href = link_el.get_attribute("href") if link_el else None
 
                     if href and href.startswith("/"):
