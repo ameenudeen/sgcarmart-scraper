@@ -23,7 +23,7 @@ jobs:
       - run: python listings.py   # make sure this matches your filename
 
       - name: Upload scraped data
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: sgcarmart-data
           path: sgcarmart.json
